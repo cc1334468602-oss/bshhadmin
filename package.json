@@ -1,0 +1,16 @@
+{
+  "name": "bshhadmin",
+  "version": "1.0.0",
+  "description": "助贷管理后台 —— 员工管理、简道云对接配置、匹配规则维护（后台）",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js",
+    "precheck": "bash deploy/precheck.sh"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "dependencies": {},
+  "private": true
+}

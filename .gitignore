@@ -1,0 +1,32 @@
+# ---- 敏感文件：绝对不能进仓库 ----
+.env
+.env.local
+.env.production
+jdy-config.json
+*.local.md
+凭证清单*
+
+# ---- 证书与密钥 ----
+*.pem
+*.key
+*.crt
+*.p12
+
+# ---- 依赖与日志 ----
+node_modules/
+logs/
+*.log
+npm-debug.log*
+
+# ---- 运行时与备份 ----
+.pm2/
+*.tar.gz
+backup/
+tmp/
+*.tmp
+
+# ---- 编辑器与系统 ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

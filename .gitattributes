@@ -1,0 +1,21 @@
+# 强制以下文件使用 LF 行尾
+# 原因：Windows 本地开发会把行尾转成 CRLF，
+#      带 CRLF 的 shell 脚本在 Linux 上执行会报 $'\r': command not found
+
+*.sh        text eol=lf
+*.conf      text eol=lf
+.env.example text eol=lf
+Dockerfile  text eol=lf
+
+# 源码统一 LF，避免跨平台 diff 噪音
+*.js        text eol=lf
+*.json      text eol=lf
+*.html      text eol=lf
+*.css       text eol=lf
+*.md        text eol=lf
+
+# 二进制文件不做转换
+*.png       binary
+*.jpg       binary
+*.ico       binary
+*.gz        binary
