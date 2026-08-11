@@ -20,7 +20,7 @@ window.Admin = (function () {
     document.querySelector('.nav-item[data-page="' + page + '"]').classList.add('active');
 
     if (page === 'employees') renderEmployees();
-    else if (page === 'rules') loadRulesToForm();
+    else if (page === 'rules') loadRules();
     else if (page === 'dashboard') renderDashboard();
     else if (page === 'jdyapi') loadJdyConfig();
   }
@@ -143,10 +143,17 @@ window.Admin = (function () {
 
     emp.jiandaoyunBound = true;
     emp.jiandaoyunAccount = jdyUser.name + '（简道云）';
+    renderEmployees();
+
+    // 落库
+    fetch('/api/db/employees', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: emp.id, phone: emp.phone, jiandaoyunBound: true, jiandaoyunAccount: emp.jiandaoyunAccount }),
+    }).catch(function () {});
 
     alert('绑定成功！' + emp.name + ' 已关联简道云账号：' + jdyUser.name);
     closeBindModal();
-    renderEmployees();
   }
 
   // ===== 添加员工 =====
@@ -170,23 +177,42 @@ window.Admin = (function () {
     if (!dept) { alert('请输入部门'); return; }
 
     const newId = 'E' + String(employees.length + 1).padStart(3, '0');
-    employees.push({
-      id: newId,
-      name: name,
-      phone: phone,
-      department: dept,
-      password: '123456',
-      jiandaoyunBound: false,
-      jiandaoyunAccount: '',
-      avatar: '',
-    });
-
-    alert('员工 ' + name + ' 添加成功！');
-    closeAddEmp();
+    const emp = {
+      id: newId, name: name, phone: phone, department: dept,
+      jiandaoyunBound: false, jiandaoyunAccount: '',
+    };
+    // 乐观更新
+    employees.push(emp);
     renderEmployees();
+    closeAddEmp();
+
+    // 落库
+    fetch('/api/db/employees', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: newId, name: name, phone: phone, department: dept }),
+    }).then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (res.success) alert('员工 ' + name + ' 添加成功！');
+        else { alert('添加失败：' + (res.error || '未知错误')); loadEmployees(); }
+      })
+      .catch(function () { alert('保存失败，已恢复本地列表'); loadEmployees(); });
   }
 
   // ===== 匹配规则配置 =====
+  function loadRules() {
+    fetch('/api/db/match-rules', { method: 'GET' })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (res.success && res.data) {
+          rules = res.data;
+          D.MATCH_RULES = JSON.parse(JSON.stringify(res.data)); // 同步到引擎缓存
+        }
+        loadRulesToForm();
+      })
+      .catch(function () { loadRulesToForm(); });
+  }
+
   function loadRulesToForm() {
     // 表单填充
     $('rule-preferred-minCredit').value = rules.preferred.minCreditScore;
@@ -241,6 +267,17 @@ window.Admin = (function () {
     D.MATCH_RULES = JSON.parse(JSON.stringify(rules));
     $('ruleJsonEditor').value = JSON.stringify(rules, null, 2);
 
+    // 落库
+    fetch('/api/db/match-rules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(rules),
+    }).then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (!res.success) alert('规则已生效（本地），但保存到数据库失败：' + (res.error || ''));
+      })
+      .catch(function () {});
+
     alert('匹配规则已保存并即时生效！');
   }
 
@@ -256,6 +293,11 @@ window.Admin = (function () {
       const parsed = JSON.parse($('ruleJsonEditor').value);
       rules = parsed;
       D.MATCH_RULES = JSON.parse(JSON.stringify(rules));
+      fetch('/api/db/match-rules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(rules),
+      }).catch(function () {});
       loadRulesToForm();
       alert('JSON 规则已应用并即时生效！');
     } catch (err) {
@@ -269,15 +311,47 @@ window.Admin = (function () {
   }
 
   // ===== 数据概览 =====
-  // 客户数据来自简道云实时拉取（后台不再内置客户 Mock 明细）
+  // 客户统计优先来自 MySQL；数据库不可用时回退简道云实时拉取
   function renderDashboard() {
     $('statEmployees').textContent = employees.length;
     $('statBound').textContent = employees.filter(function (e) { return e.jiandaoyunBound; }).length;
     $('statProducts').textContent = D.PRODUCTS.length;
     $('statCustomers').textContent = '…';
     $('statusDistribution').innerHTML =
-      '<div style="padding:20px;text-align:center;color:#8e8e93;font-size:13px;">正在从简道云读取客户数据…</div>';
+      '<div style="padding:20px;text-align:center;color:#8e8e93;font-size:13px;">正在读取客户数据…</div>';
 
+    loadProductsCount();
+    fetchDbStats();
+  }
+
+  function loadProductsCount() {
+    fetch('/api/db/products', { method: 'GET' })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (res.success && res.data) $('statProducts').textContent = res.data.length;
+      })
+      .catch(function () {});
+  }
+
+  function fetchDbStats() {
+    fetch('/api/db/customers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (res.success) {
+          $('statCustomers').textContent = res.total;
+          renderStatusDist(res.byStatus || {});
+        } else {
+          fetchJdyStats(); // 回退简道云
+        }
+      })
+      .catch(function () { fetchJdyStats(); });
+  }
+
+  function fetchJdyStats() {
     fetch('/api/jdy/customers', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -296,12 +370,13 @@ window.Admin = (function () {
   }
 
   function renderStatusDist(byStatus) {
-    const labels = ['新线索', '跟进中', '已匹配', '审批中', '已拒绝'];
+    const labels = ['new', 'following', 'matched', 'approving', 'rejected'];
+    const labelsZh = { 'new': '新线索', 'following': '跟进中', 'matched': '已匹配', 'approving': '审批中', 'rejected': '已拒绝' };
     const colors = {
-      '新线索': '#8e8e93', '跟进中': '#2563eb', '已匹配': '#34c759',
-      '审批中': '#ff9500', '已拒绝': '#ff3b30',
+      'new': '#8e8e93', 'following': '#2563eb', 'matched': '#34c759',
+      'approving': '#ff9500', 'rejected': '#ff3b30',
     };
-    // 简道云可能返回预设之外的状态值，一并展示避免统计遗漏
+    // 数据库可能返回预设之外的状态值，一并展示避免统计遗漏
     Object.keys(byStatus).forEach(function (k) {
       if (labels.indexOf(k) < 0) labels.push(k);
     });
@@ -310,7 +385,7 @@ window.Admin = (function () {
     labels.forEach(function (k) {
       html += '<div style="flex:1;min-width:120px;text-align:center;padding:16px;background:#fafafa;border-radius:8px;">';
       html += '<div style="font-size:28px;font-weight:800;color:' + (colors[k] || '#5856d6') + ';">' + (byStatus[k] || 0) + '</div>';
-      html += '<div style="font-size:13px;color:#8e8e93;margin-top:4px;">' + k + '</div>';
+      html += '<div style="font-size:13px;color:#8e8e93;margin-top:4px;">' + (labelsZh[k] || k) + '</div>';
       html += '</div>';
     });
     html += '</div>';
@@ -321,14 +396,28 @@ window.Admin = (function () {
     $('statCustomers').textContent = '-';
     $('statusDistribution').innerHTML =
       '<div style="padding:20px;background:#fff4f4;border:1px solid #ffd7d7;border-radius:8px;color:#d33;font-size:13px;">' +
-      '读取简道云客户数据失败：' + msg +
-      '<br><span style="color:#8e8e93;">请到「简道云接口」页面检查凭证配置并测试连接。</span></div>';
+      '读取客户数据失败：' + msg +
+      '<br><span style="color:#8e8e93;">请检查数据库配置或到「简道云接口」页面测试连接。</span></div>';
   }
 
   // ===== 初始化 =====
   function init() {
-    renderEmployees();
-    loadRulesToForm();
+    loadEmployees();
+    loadRules();
+  }
+
+  function loadEmployees() {
+    fetch('/api/db/employees', { method: 'GET' })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (res.success && res.data && res.data.length > 0) {
+          employees = res.data;
+        } else {
+          employees = D.EMPLOYEES.slice(); // 回退 Mock
+        }
+        renderEmployees();
+      })
+      .catch(function () { employees = D.EMPLOYEES.slice(); renderEmployees(); });
   }
 
   return {

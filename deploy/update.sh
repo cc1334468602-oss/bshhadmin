@@ -31,6 +31,11 @@ if [ "$OLD_COMMIT" = "$NEW_COMMIT" ]; then
   yellow "  代码无变化"
 fi
 
+# ---------- 1.5 安装依赖（如 package.json 变化） ----------
+echo ""
+echo "[1.5/4] 安装依赖"
+npm install --registry=https://registry.npmmirror.com >/dev/null 2>&1 || npm install
+
 echo ""
 echo "[2/4] 检查环境变量"
 if [ ! -f .env ]; then
@@ -38,6 +43,26 @@ if [ ! -f .env ]; then
   exit 1
 fi
 green "  ✓ .env 存在"
+
+# 确保 .env 含数据库配置（固定凭据，与 setup-mysql.sh / .env.example 保持一致）
+DB_HOST="${DB_HOST:-localhost}"
+DB_PORT="${DB_PORT:-3306}"
+DB_USER="${DB_USER:-bshh_user}"
+DB_PASS="${DB_PASS:-Bshh@2026}"
+DB_NAME="${DB_NAME:-bshh_db}"
+# 若初始化脚本曾导出连接信息，则以导出值优先
+if [ -f /tmp/bshh_db.env ]; then
+  source /tmp/bshh_db.env
+fi
+for kv in "DB_HOST=$DB_HOST" "DB_PORT=$DB_PORT" "DB_USER=$DB_USER" "DB_PASS=$DB_PASS" "DB_NAME=$DB_NAME"; do
+  key="${kv%%=*}"
+  if grep -q "^${key}=" .env 2>/dev/null; then
+    sed -i "s#^${key}=.*#${kv}#" .env
+  else
+    echo "$kv" >> .env
+  fi
+done
+green "  ✓ 已确保 .env 包含数据库配置"
 
 echo ""
 echo "[3/4] 重载服务"
