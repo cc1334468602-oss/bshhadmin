@@ -22,8 +22,23 @@ echo "当前版本：$OLD_COMMIT"
 
 echo ""
 echo "[1/4] 拉取最新代码"
-git fetch --all
-git reset --hard origin/main
+if git fetch --all 2>/dev/null && git reset --hard origin/main 2>/dev/null; then
+  green "  ✓ git 直连拉取成功"
+else
+  yellow "  git 直连失败，改用 codeload tarball 兜底..."
+  TARBALL="https://codeload.github.com/cc1334468602-oss/bshhadmin/tarball/refs/heads/main"
+  TMPD=$(mktemp -d)
+  if curl -fsSL "$TARBALL" -o "$TMPD/u.tar.gz" && tar -xzf "$TMPD/u.tar.gz" -C "$TMPD"; then
+    SRC=$(ls -d "$TMPD"/*/ | head -1)
+    rsync -a --exclude='.git' --exclude='node_modules' --exclude='.env' "$SRC"/ "$PROJECT_DIR"/
+    green "  ✓ 已用 tarball 更新工作区"
+    git fetch --all 2>/dev/null || true
+    git reset --hard origin/main 2>/dev/null || true
+  else
+    red "  ✗ tarball 兜底也失败，请检查 ECS 网络后重试"
+  fi
+  rm -rf "$TMPD"
+fi
 NEW_COMMIT=$(git rev-parse --short HEAD)
 green "  ✓ 已更新到 $NEW_COMMIT"
 
