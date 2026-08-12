@@ -90,7 +90,7 @@ echo ""
 echo "[3/4] 重载服务"
 node --check server.js || { red "  ✗ server.js 语法错误，已中止（服务未受影响）"; exit 1; }
 
-pm2 reload "$APP_NAME" --update-env || pm2 restart "$APP_NAME" --update-env || { pm2 delete "$APP_NAME" 2>/dev/null || true; pm2 start ecosystem.config.js --update-env; }
+pm2 startOrRestart ecosystem.config.js --update-env 2>/dev/null || pm2 start ecosystem.config.js --update-env
 green "  ✓ 已重载"
 
 echo ""
