@@ -22,35 +22,55 @@ echo "当前版本：$OLD_COMMIT"
 
 echo ""
 echo "[1/4] 拉取最新代码"
-if git fetch --all 2>/dev/null && git reset --hard origin/main 2>/dev/null; then
-  green "  ✓ git 直连拉取成功"
-else
-  yellow "  git 直连失败，改用 codeload tarball 兜底..."
-  TARBALL="https://codeload.github.com/cc1334468602-oss/bshhadmin/tar.gz/refs/heads/main"
-  TMPD=$(mktemp -d)
-  if curl -fsSL "$TARBALL" -o "$TMPD/u.tar.gz" && tar -xzf "$TMPD/u.tar.gz" -C "$TMPD"; then
-    SRC=$(ls -d "$TMPD"/*/ | head -1)
+# 重要：ECS 本地 git 的 origin/main 指针可能因网络不稳定而滞后，
+# 若用 git reset --hard origin/main 作主路径，会把已修复的 db.js 回退为旧版 bug。
+# 因此改为主路径用 GitHub codeload tarball 强制同步（永远取最新 main），git 仅作兜底。
+TARBALL="https://codeload.github.com/cc1334468602-oss/bshhadmin/tar.gz/refs/heads/main"
+TMPD=$(mktemp -d)
+if curl -fsSL "$TARBALL" -o "$TMPD/u.tar.gz" 2>/dev/null && tar -xzf "$TMPD/u.tar.gz" -C "$TMPD" 2>/dev/null; then
+  SRC=$(ls -d "$TMPD"/*/ 2>/dev/null | head -1)
+  if [ -n "$SRC" ]; then
     if ! command -v rsync >/dev/null 2>&1; then
       dnf install -y rsync >/dev/null 2>&1 || yum install -y rsync >/dev/null 2>&1 || true
     fi
     if command -v rsync >/dev/null 2>&1; then
-      rsync -a --exclude='.git' --exclude='node_modules' --exclude='.env' "$SRC"/ "$PROJECT_DIR"/
+      rsync -a --exclude='.git' --exclude='node_modules' --exclude='.env' --exclude='logs' "$SRC"/ "$PROJECT_DIR"/
     else
-      find "$SRC" -mindepth 1 -maxdepth 1 ! -name '.git' ! -name 'node_modules' ! -name '.env' -exec cp -a {} "$PROJECT_DIR"/ \;
+      for item in "$SRC"/*; do
+        base=$(basename "$item")
+        case "$base" in
+          .git|node_modules|.env|logs) continue ;;
+          *) cp -a "$item" "$PROJECT_DIR"/ ;;
+        esac
+      done
     fi
     green "  ✓ 已用 tarball 更新工作区"
-    git fetch --all 2>/dev/null || true
-    git reset --hard origin/main 2>/dev/null || true
   else
-    red "  ✗ tarball 兜底也失败，请检查 ECS 网络后重试"
+    yellow "  tarball 内容解析失败，尝试 git 兜底..."
+    if git fetch --all 2>/dev/null && git reset --hard FETCH_HEAD 2>/dev/null; then
+      green "  ✓ git 兜底拉取成功"
+    else
+      red "  ✗ 代码拉取失败，请检查 ECS 网络后重试"
+    fi
   fi
-  rm -rf "$TMPD"
+else
+  yellow "  tarball 拉取失败，尝试 git 兜底..."
+  if git fetch --all 2>/dev/null && git reset --hard FETCH_HEAD 2>/dev/null; then
+    green "  ✓ git 兜底拉取成功"
+  else
+    red "  ✗ 代码拉取失败，请检查 ECS 网络后重试"
+  fi
 fi
-NEW_COMMIT=$(git rev-parse --short HEAD)
+rm -rf "$TMPD"
+
+# 显示远程最新提交（git ls-remote 不受本地指针滞后影响）
+REMOTE_SHA=$(timeout 10 git ls-remote https://github.com/cc1334468602-oss/bshhadmin main 2>/dev/null | awk '{print $1}') || true
+NEW_COMMIT=${REMOTE_SHA:-latest}
+if [ "$NEW_COMMIT" != "latest" ]; then NEW_COMMIT=${NEW_COMMIT:0:7}; fi
 green "  ✓ 已更新到 $NEW_COMMIT"
 
 if [ "$OLD_COMMIT" = "$NEW_COMMIT" ]; then
-  yellow "  代码无变化"
+  yellow "  代码无变化（与远程 main 一致）"
 fi
 
 # ---------- 1.5 安装依赖（如 package.json 变化） ----------
