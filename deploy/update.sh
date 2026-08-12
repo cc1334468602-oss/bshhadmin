@@ -30,7 +30,14 @@ else
   TMPD=$(mktemp -d)
   if curl -fsSL "$TARBALL" -o "$TMPD/u.tar.gz" && tar -xzf "$TMPD/u.tar.gz" -C "$TMPD"; then
     SRC=$(ls -d "$TMPD"/*/ | head -1)
-    rsync -a --exclude='.git' --exclude='node_modules' --exclude='.env' "$SRC"/ "$PROJECT_DIR"/
+    if ! command -v rsync >/dev/null 2>&1; then
+      dnf install -y rsync >/dev/null 2>&1 || yum install -y rsync >/dev/null 2>&1 || true
+    fi
+    if command -v rsync >/dev/null 2>&1; then
+      rsync -a --exclude='.git' --exclude='node_modules' --exclude='.env' "$SRC"/ "$PROJECT_DIR"/
+    else
+      find "$SRC" -mindepth 1 -maxdepth 1 ! -name '.git' ! -name 'node_modules' ! -name '.env' -exec cp -a {} "$PROJECT_DIR"/ \;
+    fi
     green "  ✓ 已用 tarball 更新工作区"
     git fetch --all 2>/dev/null || true
     git reset --hard origin/main 2>/dev/null || true
@@ -83,7 +90,7 @@ echo ""
 echo "[3/4] 重载服务"
 node --check server.js || { red "  ✗ server.js 语法错误，已中止（服务未受影响）"; exit 1; }
 
-pm2 reload "$APP_NAME" --update-env
+pm2 reload "$APP_NAME" --update-env || pm2 restart "$APP_NAME" --update-env || { pm2 delete "$APP_NAME" 2>/dev/null || true; pm2 start ecosystem.config.js --update-env; }
 green "  ✓ 已重载"
 
 echo ""
