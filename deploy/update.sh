@@ -26,7 +26,7 @@ if git fetch --all 2>/dev/null && git reset --hard origin/main 2>/dev/null; then
   green "  ✓ git 直连拉取成功"
 else
   yellow "  git 直连失败，改用 codeload tarball 兜底..."
-  TARBALL="https://codeload.github.com/cc1334468602-oss/bshhadmin/tarball/refs/heads/main"
+  TARBALL="https://codeload.github.com/cc1334468602-oss/bshhadmin/tar.gz/refs/heads/main"
   TMPD=$(mktemp -d)
   if curl -fsSL "$TARBALL" -o "$TMPD/u.tar.gz" && tar -xzf "$TMPD/u.tar.gz" -C "$TMPD"; then
     SRC=$(ls -d "$TMPD"/*/ | head -1)
