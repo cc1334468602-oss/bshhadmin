@@ -16,16 +16,23 @@ const crypto = require('crypto');
 let mysql = null;
 try { mysql = require('mysql2/promise'); } catch (e) { mysql = null; }
 
-const DB_CFG = {
-  host:     process.env.DB_HOST || '127.0.0.1',
-  port:     parseInt(process.env.DB_PORT, 10) || 3306,
-  user:     process.env.DB_USER || 'bshh_user',
-  password: process.env.DB_PASS || '',
-  database: process.env.DB_NAME || 'bshh_db',
-  waitForConnections: true,
-  connectionLimit: 5,
-  charset: 'utf8mb4',
-};
+// 注意：本函数每次调用都实时读取 process.env。
+// 原因：server.js 先 require('./db')，之后才执行 loadDotEnv() 加载 .env。
+// 若在模块加载时把配置缓存成常量，密码会被早期捕获为空串——此时 isConfigured()
+// 看 process.env.DB_PASS 却显示"已启用"，于是 MySQL 以空密码连接，报
+// "Access denied ... (using password: NO)"。故改为懒加载，建连时才读真实值。
+function getDbConfig() {
+  return {
+    host:     process.env.DB_HOST || '127.0.0.1',
+    port:     parseInt(process.env.DB_PORT, 10) || 3306,
+    user:     process.env.DB_USER || 'bshh_user',
+    password: process.env.DB_PASS || '',
+    database: process.env.DB_NAME || 'bshh_db',
+    waitForConnections: true,
+    connectionLimit: 5,
+    charset: 'utf8mb4',
+  };
+}
 
 let pool = null;
 let available = false;
@@ -39,7 +46,7 @@ function getPool() {
   if (!isConfigured()) return null;
   if (!pool) {
     try {
-      pool = mysql.createPool(DB_CFG);
+      pool = mysql.createPool(getDbConfig());
     } catch (e) {
       console.error('[DB] 连接池创建失败：', e.message);
       return null;
