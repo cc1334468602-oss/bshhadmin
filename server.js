@@ -10,7 +10,157 @@ const http = require('http');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const db = require('./db');
+
+// ============ 登录会话（内存存储，进程重启后需重新登录） ============
+const SESSION_TTL = 24 * 3600 * 1000; // 24 小时
+const SESSION_COOKIE = 'bshh_admin_session';
+const sessions = new Map();
+
+function getToken(req) {
+  const c = req.headers && req.headers.cookie;
+  if (!c) return null;
+  const m = c.match(/(?:^|;\s*)bshh_admin_session=([^;]+)/);
+  return m ? m[1] : null;
+}
+function getSession(req) {
+  const t = getToken(req);
+  if (!t) return null;
+  const s = sessions.get(t);
+  if (!s) return null;
+  if (s.expires < Date.now()) { sessions.delete(t); return null; }
+  return s;
+}
+function createSession(user) {
+  const token = crypto.randomBytes(24).toString('hex');
+  sessions.set(token, {
+    id: user.id, name: user.name, account: user.account || '', role: user.role || 'admin',
+    expires: Date.now() + SESSION_TTL,
+  });
+  return token;
+}
+
+// ============ 后台管理员账号存储（优先 DB，无 DB 时内存兜底用于本地预览） ============
+function adminHash(u, p) {
+  return crypto.createHash('sha256').update('admin:' + u + ':' + p).digest('hex');
+}
+
+// 内存兜底表：DB 未连接时用于本地预览/调试，进程重启后丢失，仅演示用途
+const MEM_ADMINS = new Map();
+(function seedMemAdmin() {
+  const u = process.env.ADMIN_USER || 'admin';
+  const p = process.env.ADMIN_PASS || '111111';
+  MEM_ADMINS.set(u, { id: u, username: u, name: '管理员', role: 'super', password_hash: adminHash(u, p) });
+})();
+
+function adminDBEnabled() { return db.isConfigured(); }
+
+function adminIsSuper(username) {
+  const envUser = process.env.ADMIN_USER || 'admin';
+  if (username === envUser) return true;
+  const a = MEM_ADMINS.get(username);
+  if (a && a.role === 'super') return true;
+  return false;
+}
+
+function memVerify(u, p) {
+  const a = MEM_ADMINS.get(u);
+  if (!a) return null;
+  if (a.password_hash !== adminHash(u, p)) return null;
+  return { id: a.id, account: a.username, name: a.name, role: a.role };
+}
+
+function adminVerify(u, p) {
+  if (adminDBEnabled()) {
+    return db.query('SELECT id,username,name,password_hash,role FROM admin_users WHERE username=?', [u])
+      .then(function (rows) {
+        if (!rows.length) return null;
+        const a = rows[0];
+        if (a.password_hash !== adminHash(u, p)) return null;
+        return { id: a.id, account: a.username, name: a.name, role: a.role };
+      })
+      .catch(function () { return memVerify(u, p); });
+  }
+  return Promise.resolve(memVerify(u, p));
+}
+
+function adminList() {
+  const mapper = function (a) { return { id: a.id, username: a.username, name: a.name, role: a.role }; };
+  if (adminDBEnabled()) {
+    return db.query('SELECT id,username,name,role,created_at FROM admin_users ORDER BY id')
+      .then(function (rows) {
+        return rows.map(function (r) { return { id: r.id, username: r.username, name: r.name, role: r.role, createdAt: r.created_at }; });
+      })
+      .catch(function () { return Array.from(MEM_ADMINS.values()).map(mapper); });
+  }
+  return Promise.resolve(Array.from(MEM_ADMINS.values()).map(mapper));
+}
+
+function adminCreate(d) {
+  if (!d.username || !d.password) return Promise.reject(new Error('缺少账号或密码'));
+  const role = d.role === 'super' ? 'super' : 'admin';
+  if (adminDBEnabled()) {
+    const id = d.id || genId('A');
+    return db.query('INSERT INTO admin_users (id,username,password_hash,name,role) VALUES (?,?,?,?,?)',
+      [id, d.username, adminHash(d.username, d.password), d.name || d.username, role])
+      .then(function () { return { id: id, username: d.username, name: d.name || d.username, role: role }; })
+      .catch(function (e) {
+        const msg = String(e.message || '');
+        if (msg.indexOf('Duplicate') >= 0 || msg.indexOf('uk_username') >= 0) throw new Error('账号已存在');
+        MEM_ADMINS.set(d.username, { id: id, username: d.username, name: d.name || d.username, role: role, password_hash: adminHash(d.username, d.password) });
+        return { id: id, username: d.username, name: d.name || d.username, role: role };
+      });
+  }
+  if (MEM_ADMINS.has(d.username)) return Promise.reject(new Error('账号已存在'));
+  const mid = d.id || genId('A');
+  MEM_ADMINS.set(d.username, { id: mid, username: d.username, name: d.name || d.username, role: role, password_hash: adminHash(d.username, d.password) });
+  return Promise.resolve({ id: mid, username: d.username, name: d.name || d.username, role: role });
+}
+
+function adminUpdate(d) {
+  if (!d.username) return Promise.reject(new Error('缺少账号'));
+  if (adminDBEnabled()) {
+    const sets = [], p = [];
+    if (d.name !== undefined) { sets.push('name=?'); p.push(d.name); }
+    if (d.role !== undefined) { sets.push('role=?'); p.push(d.role); }
+    if (d.password) { sets.push('password_hash=?'); p.push(adminHash(d.username, d.password)); }
+    if (sets.length === 0) return Promise.resolve({ username: d.username });
+    p.push(d.username);
+    return db.query('UPDATE admin_users SET ' + sets.join(',') + ' WHERE username=?', p)
+      .then(function () { return { username: d.username }; })
+      .catch(function (e) {
+        if (String(e.message || '').indexOf('super') >= 0) throw e;
+        const a = MEM_ADMINS.get(d.username);
+        if (!a) throw new Error('账号不存在');
+        if (d.name !== undefined) a.name = d.name;
+        if (d.role !== undefined) a.role = d.role;
+        if (d.password) a.password_hash = adminHash(d.username, d.password);
+        return { username: d.username };
+      });
+  }
+  const a = MEM_ADMINS.get(d.username);
+  if (!a) return Promise.reject(new Error('账号不存在'));
+  if (d.name !== undefined) a.name = d.name;
+  if (d.role !== undefined) a.role = d.role;
+  if (d.password) a.password_hash = adminHash(d.username, d.password);
+  return Promise.resolve({ username: d.username });
+}
+
+function adminRemove(username) {
+  if (!username) return Promise.reject(new Error('缺少账号'));
+  if (adminIsSuper(username)) return Promise.reject(new Error('超级管理员账号不可删除'));
+  if (adminDBEnabled()) {
+    return db.query('DELETE FROM admin_users WHERE username=? AND role<>?', [username, 'super'])
+      .then(function (r) { if (r.affectedRows === 0) throw new Error('账号不存在或为超级管理员'); return { username: username }; })
+      .catch(function (e) {
+        if (e.message === '账号不存在或为超级管理员') throw e;
+        MEM_ADMINS.delete(username); return { username: username };
+      });
+  }
+  MEM_ADMINS.delete(username);
+  return Promise.resolve({ username: username });
+}
 
 (function loadDotEnv() {
   const envPath = path.join(__dirname, '.env');
@@ -175,6 +325,12 @@ function genId(prefix) {
 
 function handleApi(req, res, urlPath, body) {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  // 禁止浏览器缓存 API 响应（尤其 /api/auth/me 的登录态），
+  // 否则 Chrome 会启发式缓存已登录的 200，导致未登录时 login.js 误判已登录、
+  // 跳后台又被守卫挡回，形成闪屏死循环。
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
 
   if (urlPath === '/api/health') {
     db.getStatus().then(function (st) {
@@ -185,6 +341,51 @@ function handleApi(req, res, urlPath, body) {
       }));
     });
     return;
+  }
+
+  // ---------- 登录鉴权接口（无需登录即可访问） ----------
+  if (urlPath === '/api/auth/login' && req.method === 'POST') {
+    var lp = {};
+    try { lp = JSON.parse(body || '{}'); } catch (e) {}
+    var username = (lp.username || lp.account || '').trim();
+    var password = lp.password || '';
+    if (!username || !password) {
+      res.end(JSON.stringify({ success: false, error: '请输入管理员账号和密码' }));
+      return;
+    }
+    // 后台管理员账号：优先查 admin_users 表，DB 不可用时回退 .env 账号
+    adminVerify(username, password).then(function (user) {
+      if (!user) { res.end(JSON.stringify({ success: false, error: '账号或密码错误' })); return; }
+      var token = createSession(user);
+      res.setHeader('Set-Cookie', SESSION_COOKIE + '=' + token + '; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400');
+      res.end(JSON.stringify({ success: true, user: { id: user.id, name: user.name, account: user.account, role: user.role } }));
+    }).catch(function (e) { res.end(JSON.stringify({ success: false, error: e.message })); });
+    return;
+  }
+
+  if (urlPath === '/api/auth/me' && req.method === 'GET') {
+    var s0 = getSession(req);
+    if (!s0) { res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify({ success: false })); return; }
+    res.end(JSON.stringify({ success: true, user: { id: s0.id, name: s0.name, account: s0.account, role: s0.role } }));
+    return;
+  }
+
+  if (urlPath === '/api/auth/logout' && req.method === 'POST') {
+    var tk = getToken(req);
+    if (tk) sessions.delete(tk);
+    res.setHeader('Set-Cookie', SESSION_COOKIE + '=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0');
+    res.end(JSON.stringify({ success: true }));
+    return;
+  }
+
+  // ---------- 登录守卫：其余业务/配置接口必须已登录 ----------
+  if (urlPath !== '/api/health') {
+    var sess = getSession(req);
+    if (!sess) {
+      res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, error: '未登录或登录已过期', code: 'UNAUTH' }));
+      return;
+    }
   }
 
   if (urlPath === '/api/jdy/config' && req.method === 'GET') {
@@ -358,6 +559,46 @@ function handleApi(req, res, urlPath, body) {
     return;
   }
 
+  // --- 后台管理员账号管理（仅 super 可操作） ---
+  if (urlPath === '/api/admin/accounts' && req.method === 'GET') {
+    if (sess.role !== 'super') { res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify({ success: false, error: '仅超级管理员可管理账号' })); return; }
+    adminList().then(function (list) {
+      res.end(JSON.stringify({ success: true, data: list, current: sess.account }));
+    }).catch(function (e) { res.end(JSON.stringify({ success: false, error: e.message })); });
+    return;
+  }
+
+  if (urlPath === '/api/admin/accounts' && req.method === 'POST') {
+    if (sess.role !== 'super') { res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify({ success: false, error: '仅超级管理员可管理账号' })); return; }
+    var na = {};
+    try { na = JSON.parse(body || '{}'); } catch (e) {}
+    if (!na.username || !na.password) { res.end(JSON.stringify({ success: false, error: '账号和密码必填' })); return; }
+    adminCreate(na).then(function (r) { res.end(JSON.stringify({ success: true, data: r })); })
+      .catch(function (e) { res.end(JSON.stringify({ success: false, error: e.message })); });
+    return;
+  }
+
+  if (urlPath === '/api/admin/accounts' && req.method === 'PUT') {
+    if (sess.role !== 'super') { res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify({ success: false, error: '仅超级管理员可管理账号' })); return; }
+    var ua = {};
+    try { ua = JSON.parse(body || '{}'); } catch (e) {}
+    if (!ua.username) { res.end(JSON.stringify({ success: false, error: '缺少账号' })); return; }
+    if (ua.role && ua.role !== 'super' && adminIsSuper(ua.username)) { res.end(JSON.stringify({ success: false, error: '超级管理员不可降权' })); return; }
+    adminUpdate(ua).then(function (r) { res.end(JSON.stringify({ success: true, data: r })); })
+      .catch(function (e) { res.end(JSON.stringify({ success: false, error: e.message })); });
+    return;
+  }
+
+  if (urlPath === '/api/admin/accounts' && req.method === 'DELETE') {
+    if (sess.role !== 'super') { res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify({ success: false, error: '仅超级管理员可管理账号' })); return; }
+    var da = {};
+    try { da = JSON.parse(body || '{}'); } catch (e) {}
+    if (!da.username) { res.end(JSON.stringify({ success: false, error: '缺少账号' })); return; }
+    adminRemove(da.username).then(function (r) { res.end(JSON.stringify({ success: true, data: r })); })
+      .catch(function (e) { res.end(JSON.stringify({ success: false, error: e.message })); });
+    return;
+  }
+
   res.writeHead(404);
   res.end(JSON.stringify({ error: 'Unknown API: ' + urlPath }));
 }
@@ -375,7 +616,23 @@ var MIME = {
 
 var server = http.createServer(function(req, res) {
   var urlPath = req.url.split('?')[0];
-  if (urlPath === '/') urlPath = '/index.html';
+
+  // 根路径与旧入口统一跳转到默认后台页面（员工管理）
+  if (urlPath === '/' || urlPath === '/index.html') {
+    res.writeHead(302, { 'Location': '/pages/employees.html' });
+    res.end();
+    return;
+  }
+
+  // 受保护的后台页面：未登录访问任意 /pages/*.html 一律跳登录页
+  // （login.html 与 css/js 等静态资源无需登录）
+  if (urlPath.indexOf('/pages/') === 0 && path.extname(urlPath) === '.html') {
+    if (!getSession(req)) {
+      res.writeHead(302, { 'Location': '/login.html' });
+      res.end();
+      return;
+    }
+  }
 
   if (urlPath.startsWith('/api/')) {
     var body = '';

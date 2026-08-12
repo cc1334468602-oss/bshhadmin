@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>数据概览 · 助贷管理后台</title>
+  <link rel="stylesheet" href="../css/admin.css">
+</head>
+<body>
+<div class="admin-layout">
+  <div class="admin-sidebar" id="app-sidebar"></div>
+
+  <div class="admin-main">
+    <div class="page-header">
+      <div class="ph-title">数据概览</div>
+    </div>
+    <div class="stats-row">
+      <div class="stat-card"><div class="sc-num" id="statEmployees">0</div><div class="sc-label">员工总数</div></div>
+      <div class="stat-card"><div class="sc-num" id="statBound">0</div><div class="sc-label">已绑定简道云</div></div>
+      <div class="stat-card"><div class="sc-num" id="statCustomers">0</div><div class="sc-label">客户总数</div></div>
+      <div class="stat-card"><div class="sc-num" id="statProducts">0</div><div class="sc-label">银行产品数</div></div>
+    </div>
+    <div class="rule-section">
+      <h3>客户状态分布</h3>
+      <div id="statusDistribution" style="padding:12px;"></div>
+    </div>
+  </div>
+</div>
+
+<script src="../js/data.js"></script>
+<script src="../js/layout.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/dashboard.js"></script>
+</body>
+</html>

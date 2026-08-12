@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>简道云接口 · 助贷管理后台</title>
+  <link rel="stylesheet" href="../css/admin.css">
+</head>
+<body>
+<div class="admin-layout">
+  <div class="admin-sidebar" id="app-sidebar"></div>
+
+  <div class="admin-main">
+    <div class="page-header">
+      <div class="ph-title">简道云接口配置</div>
+      <div class="ph-actions">
+        <button class="btn btn-outline btn-sm" onclick="Page.testJdyConnection()">测试连接</button>
+        <button class="btn btn-primary btn-sm" onclick="Page.saveJdyConfig()">保存配置</button>
+      </div>
+    </div>
+
+    <div class="rule-section">
+      <h3>基础凭证</h3>
+      <div class="rule-grid">
+        <div class="rule-field"><label>API Key</label><input type="text" id="jdy-apiKey" placeholder="简道云开放平台 → 密钥管理 → API Key"></div>
+        <div class="rule-field"><label>App ID</label><input type="text" id="jdy-appId" placeholder="应用ID"></div>
+      </div>
+    </div>
+
+    <div class="rule-section">
+      <h3>表单 Entry ID</h3>
+      <div class="rule-grid">
+        <div class="rule-field"><label>客户信息表</label><input type="text" id="jdy-entry-customer" placeholder="entry_id"></div>
+        <div class="rule-field"><label>内部贷款记录表</label><input type="text" id="jdy-entry-loan" placeholder="entry_id"></div>
+        <div class="rule-field"><label>历史贷款记录表</label><input type="text" id="jdy-entry-loanHistory" placeholder="entry_id"></div>
+        <div class="rule-field"><label>资金周转表</label><input type="text" id="jdy-entry-cashFlow" placeholder="entry_id"></div>
+        <div class="rule-field"><label>意向业务表</label><input type="text" id="jdy-entry-intention" placeholder="entry_id"></div>
+        <div class="rule-field"><label>日常跟进表</label><input type="text" id="jdy-entry-followUp" placeholder="entry_id"></div>
+        <div class="rule-field"><label>资金回款表</label><input type="text" id="jdy-entry-repayment" placeholder="entry_id"></div>
+      </div>
+    </div>
+
+    <div class="rule-section">
+      <h3>连接状态</h3>
+      <div id="jdyConnectionStatus" style="padding:12px;font-size:14px;">
+        <span style="color:var(--text-2);">点击「测试连接」验证配置是否有效</span>
+      </div>
+    </div>
+
+    <div class="rule-section">
+      <h3>字段映射参考（客户信息表）</h3>
+      <div class="data-table" style="margin-top:8px;">
+        <table>
+          <thead><tr><th>简道云字段</th><th>系统字段</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr><td>_widget_1771923209993</td><td>name</td><td>客户姓名</td></tr>
+            <tr><td>_widget_1771923209994</td><td>phone</td><td>手机号</td></tr>
+            <tr><td>_widget_1771985710736</td><td>level</td><td>客户等级</td></tr>
+            <tr><td>_widget_1772089340773</td><td>status</td><td>客户状态</td></tr>
+            <tr><td>_widget_1771923209996</td><td>source</td><td>客户来源</td></tr>
+            <tr><td>_widget_1771983232211</td><td>salesperson</td><td>所属业务员</td></tr>
+            <tr><td>_widget_1772068830044</td><td>company</td><td>公司/单位名称</td></tr>
+            <tr><td>_widget_1772068830054</td><td>address</td><td>地址</td></tr>
+            <tr><td>_widget_1772068830049</td><td>requiredAmount</td><td>需求金额(万)</td></tr>
+            <tr><td>_widget_1772068830045</td><td>approvedAmount</td><td>已批额度(万)</td></tr>
+            <tr><td>_widget_1772068830046</td><td>assets</td><td>资产描述</td></tr>
+            <tr><td>_widget_1772068830047</td><td>liabilities</td><td>负债描述</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../js/data.js"></script>
+<script src="../js/layout.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/jdyapi.js"></script>
+</body>
+</html>

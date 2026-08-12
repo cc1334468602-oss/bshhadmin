@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>匹配规则配置 · 助贷管理后台</title>
+  <link rel="stylesheet" href="../css/admin.css">
+</head>
+<body>
+<div class="admin-layout">
+  <div class="admin-sidebar" id="app-sidebar"></div>
+
+  <div class="admin-main">
+    <div class="page-header">
+      <div class="ph-title">匹配规则配置</div>
+      <div class="ph-actions">
+        <button class="btn btn-outline btn-sm" onclick="Page.resetRules()">恢复默认</button>
+        <button class="btn btn-primary btn-sm" onclick="Page.saveRules()">保存规则</button>
+      </div>
+    </div>
+
+    <div class="rule-section">
+      <h3>优先推荐档位（🟢）</h3>
+      <div class="rule-grid">
+        <div class="rule-field"><label>最低信用分</label><input type="number" id="rule-preferred-minCredit" value="650"></div>
+        <div class="rule-field"><label>最高负债率(%)</label><input type="number" id="rule-preferred-maxDebt" value="55"></div>
+        <div class="rule-field"><label>利率上限(%)</label><input type="number" id="rule-preferred-rateCeiling" value="6.0" step="0.1"></div>
+        <div class="rule-field"><label>适用银行类型</label><input type="text" id="rule-preferred-bankTypes" value="国有大行"></div>
+        <div class="rule-field"><label>额度建议倍数(月收入)</label><input type="number" id="rule-preferred-multiplier" value="30"></div>
+      </div>
+    </div>
+
+    <div class="rule-section">
+      <h3>备选方案档位（🟡）</h3>
+      <div class="rule-grid">
+        <div class="rule-field"><label>最低信用分</label><input type="number" id="rule-backup-minCredit" value="600"></div>
+        <div class="rule-field"><label>最高负债率(%)</label><input type="number" id="rule-backup-maxDebt" value="65"></div>
+        <div class="rule-field"><label>利率上限(%)</label><input type="number" id="rule-backup-rateCeiling" value="8.5" step="0.1"></div>
+        <div class="rule-field"><label>适用银行类型</label><input type="text" id="rule-backup-bankTypes" value="国有大行,股份制银行"></div>
+        <div class="rule-field"><label>额度建议倍数(月收入)</label><input type="number" id="rule-backup-multiplier" value="20"></div>
+      </div>
+    </div>
+
+    <div class="rule-section">
+      <h3>兜底方案档位（🔴）</h3>
+      <div class="rule-grid">
+        <div class="rule-field"><label>最低信用分</label><input type="number" id="rule-fallback-minCredit" value="500"></div>
+        <div class="rule-field"><label>最高负债率(%)</label><input type="number" id="rule-fallback-maxDebt" value="80"></div>
+        <div class="rule-field"><label>利率上限(%)</label><input type="number" id="rule-fallback-rateCeiling" value="20" step="0.1"></div>
+        <div class="rule-field"><label>适用银行类型</label><input type="text" id="rule-fallback-bankTypes" value="消费金融"></div>
+        <div class="rule-field"><label>额度建议倍数(月收入)</label><input type="number" id="rule-fallback-multiplier" value="10"></div>
+      </div>
+    </div>
+
+    <div class="rule-section">
+      <h3>JSON 高级编辑（修改后点击保存即时生效，无需重启服务）</h3>
+      <textarea class="rule-editor" id="ruleJsonEditor" spellcheck="false"></textarea>
+      <div style="margin-top:12px; display:flex; gap:8px;">
+        <button class="btn btn-primary btn-sm" onclick="Page.applyJson()">应用JSON</button>
+        <button class="btn btn-outline btn-sm" onclick="Page.syncFormToJson()">表单 → JSON 同步</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../js/data.js"></script>
+<script src="../js/layout.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/rules.js"></script>
+</body>
+</html>

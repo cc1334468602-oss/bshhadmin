@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>员工管理 · 助贷管理后台</title>
+  <link rel="stylesheet" href="../css/admin.css">
+</head>
+<body>
+<div class="admin-layout">
+  <!-- 侧边栏（由 layout.js 渲染） -->
+  <div class="admin-sidebar" id="app-sidebar"></div>
+
+  <!-- 主内容区 -->
+  <div class="admin-main">
+    <div class="page-header">
+      <div class="ph-title">员工管理</div>
+      <div class="ph-actions">
+        <button class="btn btn-primary btn-sm" onclick="Page.showAddEmployee()">+ 添加员工</button>
+      </div>
+    </div>
+    <div class="data-table">
+      <table>
+        <thead>
+          <tr>
+            <th>员工编号</th>
+            <th>姓名</th>
+            <th>手机号</th>
+            <th>部门</th>
+            <th>简道云绑定</th>
+            <th>创建时间</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="employeeTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- 绑定简道云弹窗 -->
+<div class="modal-overlay" id="bindModal">
+  <div class="modal">
+    <div class="modal-title">绑定简道云账号</div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">员工</label>
+        <div id="bindEmployeeName" style="font-size:15px;font-weight:600;"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">选择简道云业务员</label>
+        <select class="form-select" id="bindSelect"></select>
+      </div>
+      <div id="bindCurrent" style="font-size:13px;color:var(--text-2);"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="Page.closeBindModal()">取消</button>
+      <button class="btn btn-primary" onclick="Page.confirmBind()">确认绑定</button>
+    </div>
+  </div>
+</div>
+
+<!-- 添加员工弹窗 -->
+<div class="modal-overlay" id="addEmpModal">
+  <div class="modal">
+    <div class="modal-title">添加员工</div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">姓名</label>
+        <input class="form-input" id="addEmpName" placeholder="请输入员工姓名">
+      </div>
+      <div class="form-group">
+        <label class="form-label">手机号</label>
+        <input class="form-input" id="addEmpPhone" placeholder="11位手机号" maxlength="11">
+      </div>
+      <div class="form-group">
+        <label class="form-label">部门</label>
+        <input class="form-input" id="addEmpDept" placeholder="如：业务一部">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="Page.closeAddEmp()">取消</button>
+      <button class="btn btn-primary" onclick="Page.confirmAddEmp()">确认添加</button>
+    </div>
+  </div>
+</div>
+
+<script src="../js/data.js"></script>
+<script src="../js/layout.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/employees.js"></script>
+</body>
+</html>

@@ -132,6 +132,21 @@ CREATE TABLE IF NOT EXISTS `match_rules` (
   `backup`             JSON        NOT NULL,
   `fallback`           JSON        NOT NULL,
   `amount_multiplier`  JSON        NOT NULL,
-  `updated_at`         DATETIME    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `updated_at`         DATetime    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------- 后台管理员账号 ----------------
+-- 与前台员工(employees)完全分离，仅用于登录后台系统。
+-- role: super=超级管理员(可管理其他账号) | admin=普通管理员(仅登录使用)
+CREATE TABLE IF NOT EXISTS `admin_users` (
+  `id`            VARCHAR(32)   NOT NULL,
+  `username`      VARCHAR(64)   NOT NULL,
+  `password_hash` VARCHAR(128)  NOT NULL DEFAULT '',
+  `name`          VARCHAR(64)   DEFAULT '',
+  `role`          VARCHAR(16)   NOT NULL DEFAULT 'admin',
+  `created_at`    DATETIME      DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`    DATETIME      DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_username` (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

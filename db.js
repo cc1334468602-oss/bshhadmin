@@ -89,6 +89,15 @@ function verifyPwd(phone, plain, hash) {
   return hashPwd(phone, plain) === hash;
 }
 
+// 后台管理员账号哈希（与员工哈希盐不同，避免混淆）
+function hashAdminPwd(username, plain) {
+  return crypto.createHash('sha256').update('admin:' + username + ':' + plain).digest('hex');
+}
+function verifyAdminPwd(username, plain, hash) {
+  if (!hash) return false;
+  return hashAdminPwd(username, plain) === hash;
+}
+
 // ---------------- 默认数据播种 ----------------
 const DEFAULT_PRODUCTS = [
   { id:'P01', name:'融e借', bank:'工商银行', bankType:'国有大行', type:'信用贷', minAmt:60000, maxAmt:800000, minRate:3.6, maxRate:5.6, terms:[12,24,36], req:{minCredit:650,minIncome:5000,maxDebtRatio:50,collateral:false,minYears:1}, features:['纯信用无抵押','线上审批','随借随还'] },
@@ -118,6 +127,8 @@ const DEFAULT_EMPLOYEES = [
   { id:'E003', name:'王海涛', phone:'13700137003', department:'业务一部', jiandaoyunBound:false, jiandaoyunAccount:'' },
   { id:'E004', name:'陈思琪', phone:'13600136004', department:'业务三部', jiandaoyunBound:false, jiandaoyunAccount:'' },
 ];
+
+const DEFAULT_ADMIN = { id:'admin', username:'admin', name:'超级管理员', password:'111111', role:'super' };
 
 async function ensureSeed() {
   if (!isConfigured()) return false;
@@ -157,6 +168,15 @@ async function ensureSeed() {
       }
       console.log('[DB] 已播种 ' + DEFAULT_EMPLOYEES.length + ' 个演示员工（默认密码 123456，请尽快修改）');
     }
+
+    const adminCount = await query('SELECT COUNT(*) AS c FROM admin_users');
+    if (adminCount[0].c === 0) {
+      await query(
+        'INSERT INTO admin_users (id,username,password_hash,name,role) VALUES (?,?,?,?,?)',
+        [DEFAULT_ADMIN.id, DEFAULT_ADMIN.username, hashAdminPwd(DEFAULT_ADMIN.username, DEFAULT_ADMIN.password), DEFAULT_ADMIN.name, DEFAULT_ADMIN.role]
+      );
+      console.log('[DB] 已播种超级管理员账号 admin（默认密码 111111，请尽快修改）');
+    }
     return true;
   } catch (e) {
     console.error('[DB] 播种失败：', e.message);
@@ -166,5 +186,6 @@ async function ensureSeed() {
 
 module.exports = {
   isConfigured, getPool, query, getStatus, ensureSeed, hashPwd, verifyPwd,
+  hashAdminPwd, verifyAdminPwd, DEFAULT_ADMIN,
   DEFAULT_PRODUCTS, DEFAULT_RULES, DEFAULT_EMPLOYEES,
 };

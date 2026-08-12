@@ -20,11 +20,24 @@
 
 ```
 bshhadmin/
-├── index.html              # PC 后台入口（原 admin.html）
+├── index.html              # 入口重定向桩 → /pages/employees.html
+├── login.html              # 登录页（管理员账号 / 密码）
+├── pages/                  # 多页面架构：每个模块独立 HTML，左侧菜单 <a> 真实跳转
+│   ├── employees.html      # 员工管理
+│   ├── rules.html          # 匹配规则配置
+│   ├── dashboard.html      # 数据概览
+│   ├── jdyapi.html         # 简道云接口配置
+│   └── admins.html         # 管理员账号（仅超级管理员可见）
 ├── css/admin.css
 ├── js/
-│   ├── admin.js           # 后台逻辑（仪表盘实时拉取 /api/jdy/customers）
-│   └── data.js            # 员工 / 简道云用户 / 产品(12款) / 匹配规则（不含客户明细）
+│   ├── layout.js          # 公共侧边栏渲染（高亮当前页 / 仅 super 显示管理员入口）
+│   ├── auth.js            # 页面级登录守卫：校验会话 → 渲染侧边栏 → 调 Page.init()
+│   ├── data.js            # 员工 / 简道云用户 / 产品(12款) / 匹配规则（不含客户明细）
+│   ├── employees.js       # 员工管理页逻辑（window.Page）
+│   ├── rules.js           # 匹配规则页逻辑
+│   ├── dashboard.js       # 数据概览页逻辑
+│   ├── jdyapi.js          # 简道云接口页逻辑
+│   └── admins.js          # 管理员账号页逻辑
 ├── server.js              # 后台服务（独占配置写入与测试，端口默认 9192）
 ├── package.json
 ├── ecosystem.config.js
@@ -36,6 +49,7 @@ bshhadmin/
     ├── precheck.sh
     └── nginx.conf         # 后台站点模板（含 IP 白名单 / Basic Auth 注释）
 ```
+
 
 > 说明：客户明细数据**不再内置于 `data.js`**，改由后台 `/api/jdy/customers` 实时从简道云拉取，
 > 这样既保证两端数据一致，也避免把客户敏感信息进仓库。
