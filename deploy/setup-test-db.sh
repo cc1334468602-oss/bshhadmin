@@ -11,9 +11,11 @@
 #       （schema.sql 已包含 admin_users 等全部表）。
 # 后续：启动测试实例由 update.sh 的 pm2 自动完成（ecosystem 已含 *-test 实例）。
 #
-# 重要：两个 schema.sql 顶部都带 `CREATE DATABASE bshh_db; USE bshh_db;`，
-#       直接导入会把表写进【正式库】！本脚本在导入前用 sed 剥掉这两行，
-#       并把表结构导入到命令行选定的 $TEST_DB 中。
+# 重要：两个 schema.sql 顶部都带多行 `CREATE DATABASE bshh_db ...; USE bshh_db;`，
+#       直接 `mysql bshh_test_db < schema.sql` 时，里面的 USE 会把表写进【正式库】，
+#       且多行 CREATE DATABASE 残留会成非法 SQL 导致整段导入失败。
+#       本脚本用 awk 只截取「USE 行之后」的建表语句再导入到 $TEST_DB，
+#       既隔离正式库，又避免多行 CREATE DATABASE 干扰。
 # ==========================================================
 set -e
 
@@ -65,9 +67,9 @@ if [ "$OK" = "0" ]; then
   exit 1
 fi
 
-echo "==> 导入表结构到 $TEST_DB（已剥离 CREATE DATABASE/USE，避免污染正式库 bshh_db）==="
-sed -e '/CREATE DATABASE/d' -e '/^USE /d' /var/www/bshh/db/schema.sql      | mysql -u "$APP_USER" -p"$APP_PASS" "$TEST_DB"
-sed -e '/CREATE DATABASE/d' -e '/^USE /d' /var/www/bshhadmin/db/schema.sql | mysql -u "$APP_USER" -p"$APP_PASS" "$TEST_DB"
+echo "==> 导入表结构到 $TEST_DB（awk 截取 USE 之后的建表语句，避开多行 CREATE DATABASE，杜绝污染正式库 bshh_db）==="
+awk 'f{print} /^USE /{f=1}' /var/www/bshh/db/schema.sql      | mysql -u "$APP_USER" -p"$APP_PASS" "$TEST_DB"
+awk 'f{print} /^USE /{f=1}' /var/www/bshhadmin/db/schema.sql | mysql -u "$APP_USER" -p"$APP_PASS" "$TEST_DB"
 
 echo "==> 创建独立共享配置目录（避免测试改简道云配置影响正式）==="
 mkdir -p /var/www/shared-test
