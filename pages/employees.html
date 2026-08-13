@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>员工管理 · 助贷管理后台</title>
   <link rel="stylesheet" href="../css/admin.css">
+  <link rel="icon" type="image/png" href="../images/favicon.png">
 </head>
 <body>
 <div class="admin-layout">
@@ -77,10 +78,35 @@
         <label class="form-label">部门</label>
         <input class="form-input" id="addEmpDept" placeholder="如：业务一部">
       </div>
+      <div class="form-group">
+        <label class="form-label">登录密码</label>
+        <input class="form-input" id="addEmpPwd" type="text" placeholder="留空则默认 123456">
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="Page.closeAddEmp()">取消</button>
       <button class="btn btn-primary" onclick="Page.confirmAddEmp()">确认添加</button>
+    </div>
+  </div>
+</div>
+
+<!-- 修改员工密码弹窗 -->
+<div class="modal-overlay" id="chgPwdModal">
+  <div class="modal">
+    <div class="modal-title">修改员工密码</div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">员工 / 账号</label>
+        <div id="chgPwdEmpInfo" style="font-size:15px;font-weight:600;"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">新密码</label>
+        <input class="form-input" id="chgPwdNew" type="text" placeholder="请输入新密码">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="Page.closeChgPwd()">取消</button>
+      <button class="btn btn-primary" onclick="Page.confirmChgPwd()">确认修改</button>
     </div>
   </div>
 </div>

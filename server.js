@@ -441,11 +441,12 @@ function handleApi(req, res, urlPath, body) {
 
   // --- 员工管理 ---
   if (urlPath === '/api/db/employees' && req.method === 'GET') {
-    db.query('SELECT id,name,phone,department,jiandaoyun_bound,jiandaoyun_account FROM employees ORDER BY id')
+    db.query('SELECT id,name,phone,department,jiandaoyun_bound,jiandaoyun_account,created_at FROM employees ORDER BY id')
       .then(function (rows) {
         res.end(JSON.stringify({ success: true, data: rows.map(function (r) {
           return { id: r.id, name: r.name, phone: r.phone, department: r.department,
-            jiandaoyunBound: r.jiandaoyun_bound ? true : false, jiandaoyunAccount: r.jiandaoyun_account };
+            jiandaoyunBound: r.jiandaoyun_bound ? true : false, jiandaoyunAccount: r.jiandaoyun_account,
+            createdAt: (r.created_at ? new Date(r.created_at).toISOString().replace('T', ' ').substring(0, 19) : '') };
         }) }));
       }).catch(function (e) { res.end(JSON.stringify({ success: false, error: e.message })); });
     return;
@@ -460,7 +461,11 @@ function handleApi(req, res, urlPath, body) {
       'INSERT INTO employees (id,name,phone,password_hash,department,jiandaoyun_bound,jiandaoyun_account) VALUES (?,?,?,?,?,?,?)',
       [nid, ne.name, ne.phone, db.hashPwd(ne.phone, ne.password || '123456'), ne.department || '', ne.jiandaoyunBound ? 1 : 0, ne.jiandaoyunAccount || '']
     ).then(function () { res.end(JSON.stringify({ success: true, id: nid })); })
-     .catch(function (e) { res.end(JSON.stringify({ success: false, error: e.message })); });
+     .catch(function (e) {
+        var msg = String(e.message || '');
+        if (msg.indexOf('Duplicate') >= 0 || msg.indexOf('uk_phone') >= 0) { res.end(JSON.stringify({ success: false, error: '该手机号已存在' })); return; }
+        res.end(JSON.stringify({ success: false, error: msg }));
+      });
     return;
   }
 
@@ -468,17 +473,27 @@ function handleApi(req, res, urlPath, body) {
     var ue = {};
     try { ue = JSON.parse(body || '{}'); } catch (e) {}
     if (!ue.id) { res.end(JSON.stringify({ success: false, error: '缺少 id' })); return; }
-    var sets = [], up = [];
-    ['name','phone','department','jiandaoyun_account'].forEach(function (f) {
-      if (ue[f] !== undefined) { sets.push(f + '=?'); up.push(ue[f]); }
-    });
-    if (ue.jiandaoyunBound !== undefined) { sets.push('jiandaoyun_bound=?'); up.push(ue.jiandaoyunBound ? 1 : 0); }
-    if (ue.password) { sets.push('password_hash=?'); up.push(db.hashPwd(ue.phone || '', ue.password)); }
-    if (sets.length === 0) { res.end(JSON.stringify({ success: true, id: ue.id })); return; }
-    up.push(ue.id);
-    db.query('UPDATE employees SET ' + sets.join(',') + ' WHERE id=?', up)
-      .then(function () { res.end(JSON.stringify({ success: true, id: ue.id })); })
-      .catch(function (e) { res.end(JSON.stringify({ success: false, error: e.message })); });
+    // 先取当前记录：拿到当前手机号（员工密码以手机号为盐），并确认记录存在
+    db.query('SELECT phone FROM employees WHERE id=?', [ue.id]).then(function (rows) {
+      if (!rows.length) { res.end(JSON.stringify({ success: false, error: '员工不存在' })); return; }
+      var curPhone = rows[0].phone || '';
+      var sets = [], up = [];
+      ['name','phone','department','jiandaoyun_account'].forEach(function (f) {
+        if (ue[f] !== undefined) { sets.push(f + '=?'); up.push(ue[f]); }
+      });
+      if (ue.jiandaoyunBound !== undefined) { sets.push('jiandaoyun_bound=?'); up.push(ue.jiandaoyunBound ? 1 : 0); }
+      // 修改密码：用"该员工当前手机号"哈希（若本次同时改了手机号，则用新手机号）
+      if (ue.password) {
+        var phoneForHash = ue.phone !== undefined ? ue.phone : curPhone;
+        sets.push('password_hash=?');
+        up.push(db.hashPwd(phoneForHash, ue.password));
+      }
+      if (sets.length === 0) { res.end(JSON.stringify({ success: true, id: ue.id })); return; }
+      up.push(ue.id);
+      db.query('UPDATE employees SET ' + sets.join(',') + ' WHERE id=?', up)
+        .then(function () { res.end(JSON.stringify({ success: true, id: ue.id })); })
+        .catch(function (e) { res.end(JSON.stringify({ success: false, error: e.message || '更新失败' })); });
+    }).catch(function (e) { res.end(JSON.stringify({ success: false, error: e.message || '更新失败' })); });
     return;
   }
 

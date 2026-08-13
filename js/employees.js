@@ -28,9 +28,11 @@ window.Page = (function () {
         '<td>' + e.phone + '</td>' +
         '<td>' + e.department + '</td>' +
         '<td><span class="status-badge ' + (bound ? 'status-bound' : 'status-unbound') + '">' + (bound ? '🟢 已关联' : '🔴 未关联') + '</span></td>' +
-        '<td>2026-07-15</td>' +
+        '<td>' + (e.createdAt || e.created_at || '-') + '</td>' +
         '<td>' +
-          '<button class="btn btn-outline btn-sm" onclick="Page.showBindModal(\'' + e.id + '\')">' + (bound ? '重新绑定' : '绑定简道云') + '</button>' +
+          '<button class="btn btn-outline btn-sm" onclick="Page.showBindModal(\'' + e.id + '\')">' + (bound ? '重新绑定' : '绑定简道云') + '</button> ' +
+          '<button class="btn btn-outline btn-sm" onclick="Page.showChgPwd(\'' + e.id + '\')">改密码</button> ' +
+          '<button class="btn btn-danger btn-sm" onclick="Page.deleteEmployee(\'' + e.id + '\')">删除</button>' +
         '</td>' +
       '</tr>';
     });
@@ -101,6 +103,7 @@ window.Page = (function () {
     $('addEmpName').value = '';
     $('addEmpPhone').value = '';
     $('addEmpDept').value = '';
+    $('addEmpPwd').value = '';
     $('addEmpModal').classList.add('active');
   }
 
@@ -112,29 +115,69 @@ window.Page = (function () {
     const name = $('addEmpName').value.trim();
     const phone = $('addEmpPhone').value.trim();
     const dept = $('addEmpDept').value.trim();
+    const pwd = $('addEmpPwd').value;
     if (!name) { alert('请输入姓名'); return; }
     if (!phone || phone.length !== 11) { alert('请输入11位手机号'); return; }
     if (!dept) { alert('请输入部门'); return; }
 
-    const newId = 'E' + String(employees.length + 1).padStart(3, '0');
-    const emp = {
-      id: newId, name: name, phone: phone, department: dept,
-      jiandaoyunBound: false, jiandaoyunAccount: '',
-    };
-    employees.push(emp);
-    renderEmployees();
     closeAddEmp();
-
     fetch('/api/db/employees', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: newId, name: name, phone: phone, department: dept }),
+      body: JSON.stringify({ name: name, phone: phone, department: dept, password: pwd }),
     }).then(function (r) { return r.json(); })
       .then(function (res) {
         if (res.success) alert('员工 ' + name + ' 添加成功！');
-        else { alert('添加失败：' + (res.error || '未知错误')); loadEmployees(); }
+        else alert('添加失败：' + (res.error || '未知错误'));
+        loadEmployees();
       })
-      .catch(function () { alert('保存失败，已恢复本地列表'); loadEmployees(); });
+      .catch(function () { alert('保存失败，请重试'); loadEmployees(); });
+  }
+
+  // ===== 修改员工密码 =====
+  let currentChgPwdId = null;
+  function showChgPwd(empId) {
+    const emp = employees.find(function (e) { return e.id === empId; });
+    if (!emp) return;
+    currentChgPwdId = empId;
+    $('chgPwdEmpInfo').textContent = emp.name + '（' + emp.phone + '）';
+    $('chgPwdNew').value = '';
+    $('chgPwdModal').classList.add('active');
+  }
+  function closeChgPwd() {
+    $('chgPwdModal').classList.remove('active');
+    currentChgPwdId = null;
+  }
+  function confirmChgPwd() {
+    const pwd = $('chgPwdNew').value;
+    if (!pwd) { alert('请输入新密码'); return; }
+    fetch('/api/db/employees', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: currentChgPwdId, password: pwd }),
+    }).then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (res.success) { alert('密码修改成功！'); closeChgPwd(); }
+        else alert('修改失败：' + (res.error || '未知错误'));
+      })
+      .catch(function (e) { alert('修改失败：' + e.message); });
+  }
+
+  // ===== 删除员工账号 =====
+  function deleteEmployee(empId) {
+    const emp = employees.find(function (e) { return e.id === empId; });
+    const label = emp ? (emp.name + '（' + emp.phone + '）') : empId;
+    if (!confirm('确认删除员工账号 ' + label + '？\n删除后该账号将无法登录，且不可恢复。')) return;
+    fetch('/api/db/employees', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: empId }),
+    }).then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (res.success) { alert('员工账号已删除'); loadEmployees(); }
+        else alert('删除失败：' + (res.error || '未知错误'));
+      })
+      .catch(function (e) { alert('删除失败：' + e.message); });
   }
 
   return {
@@ -145,5 +188,9 @@ window.Page = (function () {
     showAddEmployee: showAddEmployee,
     closeAddEmp: closeAddEmp,
     confirmAddEmp: confirmAddEmp,
+    showChgPwd: showChgPwd,
+    closeChgPwd: closeChgPwd,
+    confirmChgPwd: confirmChgPwd,
+    deleteEmployee: deleteEmployee,
   };
 })();
