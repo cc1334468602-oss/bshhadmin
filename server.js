@@ -223,9 +223,17 @@ function saveConfig(cfg) {
   console.log('[配置] 已写入共享配置 ' + CONFIG_PATH + '，前台服务下次请求即生效');
 }
 
-db.ensureSeed().then(function (ok) {
-  if (ok) console.log('[DB] 默认数据已就绪');
-}).catch(function (e) { console.error('[DB] 初始化异常：', e.message); });
+// 启动时若数据库尚未就绪，ensureSeed 会直接跳过；这里做带间隔重试，
+// 直到连接可用并成功播种默认数据（测试环境冷启动时尤为必要）。
+function seedWithRetry(n) {
+  if (!n) n = 12;
+  db.ensureSeed().then(function (ok) {
+    if (ok) { console.log('[DB] 默认数据已就绪'); return; }
+    if (n <= 1) return;
+    setTimeout(function () { seedWithRetry(n - 1); }, 3000);
+  }).catch(function (e) { console.error('[DB] 初始化异常：', e.message); });
+}
+seedWithRetry(12);
 
 const FIELD_MAP_CUSTOMER = {
   '_widget_1771923209993': 'name',
