@@ -40,6 +40,15 @@ mkdb() {
 OK=0
 # 1) 先试应用账号（本机 root 通常不可达）
 if mkdb "mysql -u $APP_USER -p$APP_PASS"; then OK=1; fi
+# 1.5) Debian/Ubuntu 维护账号（/etc/mysql/debian.cnf，通常有建库权限，无需 root 密码）
+if [ "$OK" = "0" ] && [ -f /etc/mysql/debian.cnf ]; then
+  DM=$(grep -m1 'user' /etc/mysql/debian.cnf | cut -d= -f2 | xargs)
+  DP=$(grep -m1 'password' /etc/mysql/debian.cnf | cut -d= -f2 | xargs)
+  if [ -n "$DM" ]; then
+    echo "==> 尝试用 Debian 维护账号 [$DM] 创建测试库并授权 $APP_USER =="
+    if mkdb "mysql -u $DM -p$DP"; then OK=1; fi
+  fi
+fi
 # 2) 再试 root（显式密码 / sudo socket / 无密 socket）
 if [ "$OK" = "0" ] && [ -n "$ROOT_PW" ]; then
   if mkdb "mysql -u root -p$ROOT_PW"; then OK=1; fi
